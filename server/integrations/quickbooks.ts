@@ -18,7 +18,7 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-const QBO_PROXY_URL = process.env.QBO_PROXY_URL || "https://qbo.countertops-more.com";
+const QBO_PROXY_URL = process.env.QBO_PROXY_URL || "https://n8n.countertops-more.com/qbo";
 const QBO_PROXY_KEY = process.env.QBO_PROXY_KEY || "fbc-qbo-proxy-2026";
 const QBO_REALM_ID = process.env.QBO_REALM_ID || "320590895";
 
