@@ -94,15 +94,26 @@ async function checkQBOStatus(): Promise<{ connected: boolean; [key: string]: un
         signal: AbortSignal.timeout(5000),
       });
       const data = await proxyStatus.json() as {
+        connected?: boolean;
+        company_name?: string;
         token_present?: boolean;
         token_valid?: boolean;
+        mode?: string;
+        customers_cached?: number;
+        invoices_cached?: number;
+        items_cached?: number;
+        data_synced_at?: string;
       };
-      if (data.token_present && data.token_valid) {
+      if (data.connected || (data.token_present && data.token_valid)) {
         return {
           connected: true,
           realmId,
-          mode: "proxy-live",
-          companyName: "Countertops and More",
+          mode: data.mode === "cache" ? "proxy-cache" : "proxy-live",
+          companyName: data.company_name || "Countertops and More",
+          customersCached: data.customers_cached,
+          invoicesCached: data.invoices_cached,
+          itemsCached: data.items_cached,
+          dataSyncedAt: data.data_synced_at,
         };
       }
     } catch {

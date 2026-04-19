@@ -1,12 +1,13 @@
 /**
- * QuickBooks Online Integration — Proxy Mode
+ * QuickBooks Online Integration — Cache-Proxy Mode
  * FBC Home Concept LLC — Ops Center
  *
- * Routes QBO API calls through a proxy service on the Hetzner server.
- * This avoids the need for direct Intuit OAuth credentials in the Replit app.
+ * Routes QBO reads through a cache-based proxy on Hetzner.
+ * The proxy serves pre-fetched QBO data (synced via Pipedream).
+ * Write operations return 503 until Intuit app is approved.
  *
  * Required env vars:
- *   QBO_PROXY_URL    — URL of the QBO proxy (e.g. https://n8n.countertops-more.com:3456)
+ *   QBO_PROXY_URL    — URL of the QBO proxy (e.g. https://n8n.countertops-more.com/qbo)
  *   QBO_PROXY_KEY    — Shared API key for proxy authentication
  *   QBO_REALM_ID     — Company ID (for display purposes)
  */
@@ -69,20 +70,32 @@ router.get("/status", async (_req: Request, res: Response) => {
       });
       const data = await proxyStatus.json() as {
         status: string;
+        connected: boolean;
+        company_name: string;
+        legal_name: string;
         token_present: boolean;
         token_valid: boolean;
         qbo_realm_id: string;
+        mode: string;
+        customers_cached: number;
+        invoices_cached: number;
+        items_cached: number;
+        data_synced_at: string;
       };
       proxyLive = true;
-      tokenReady = data.token_present && data.token_valid;
+      tokenReady = data.connected || (data.token_present && data.token_valid);
 
       if (tokenReady) {
-        // Full live connection via proxy
         return res.json({
           connected: true,
           realmId: data.qbo_realm_id || QBO_REALM_ID,
-          companyName: "Countertops and More",
-          mode: "proxy-live",
+          companyName: data.company_name || "Countertops and More",
+          legalName: data.legal_name || "FBC HOME CONCEPT LLC.",
+          mode: data.mode === "cache" ? "proxy-cache" : "proxy-live",
+          customersCached: data.customers_cached,
+          invoicesCached: data.invoices_cached,
+          itemsCached: data.items_cached,
+          dataSyncedAt: data.data_synced_at,
         });
       }
     } catch {
@@ -403,11 +416,13 @@ router.get("/customers", async (req: Request, res: Response) => {
   try {
     const search = req.query.search as string | undefined;
     const limit = req.query.limit || "50";
-    const where = search
-      ? `DisplayName LIKE '%${search.replace(/'/g, "\\'")}%'`
-      : "Active = true";
 
-    const data = await proxyRequest("GET", `/customers?where=${encodeURIComponent(where)}&limit=${limit}`);
+    // Build query params for cache proxy
+    const params = new URLSearchParams();
+    if (search) params.set("name", search);
+    params.set("max", String(limit));
+
+    const data = await proxyRequest("GET", `/customers?${params.toString()}`);
     return res.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -421,24 +436,15 @@ router.get("/customers", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get("/invoices", async (req: Request, res: Response) => {
   try {
-    const status = req.query.status || "open";
+    const status = (req.query.status as string) || "open";
     const limit = req.query.limit || "50";
-    let where: string;
 
-    switch (status) {
-      case "overdue":
-        where = `DueDate < '${new Date().toISOString().split("T")[0]}' AND Balance > '0'`;
-        break;
-      case "all":
-        where = "MetaData.CreateTime > '2020-01-01'";
-        break;
-      case "open":
-      default:
-        where = "Balance > '0'";
-        break;
-    }
+    // Build query params for cache proxy
+    const params = new URLSearchParams();
+    if (status !== "all") params.set("status", status);
+    params.set("max", String(limit));
 
-    const data = await proxyRequest("GET", `/invoices?where=${encodeURIComponent(where)}&limit=${limit}`);
+    const data = await proxyRequest("GET", `/invoices?${params.toString()}`);
     return res.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
