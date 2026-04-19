@@ -82,16 +82,13 @@ router.get("/integrations/status", async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 async function checkQBOStatus(): Promise<{ connected: boolean; [key: string]: unknown }> {
-  const hasConfig = !!(
-    process.env.QBO_CLIENT_ID &&
-    process.env.QBO_CLIENT_SECRET &&
-    process.env.QBO_REFRESH_TOKEN
-  );
+  const proxyUrl = process.env.QBO_PROXY_URL;
+  const proxyKey = process.env.QBO_PROXY_KEY;
 
-  if (!hasConfig) {
+  if (!proxyUrl || !proxyKey) {
     return {
       connected: false,
-      error: "Missing QBO_CLIENT_ID, QBO_CLIENT_SECRET, or QBO_REFRESH_TOKEN",
+      error: "Missing QBO_PROXY_URL or QBO_PROXY_KEY",
     };
   }
 
@@ -99,8 +96,9 @@ async function checkQBOStatus(): Promise<{ connected: boolean; [key: string]: un
   // (full verification available at /api/integrations/quickbooks/status)
   return {
     connected: true,
-    realmId: process.env.QBO_REALM_ID ?? "not set",
-    note: "Credentials present. Call /api/integrations/quickbooks/status for live verification.",
+    realmId: process.env.QBO_REALM_ID ?? "320590895",
+    mode: "proxy",
+    note: "Proxy configured. Call /api/integrations/quickbooks/status for live verification.",
   };
 }
 
